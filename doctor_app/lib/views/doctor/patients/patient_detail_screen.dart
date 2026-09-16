@@ -167,6 +167,14 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
     if (provider.isLoadingHistory) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFF00E5FF)));
     }
+    if (provider.errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Text('Error: ${provider.errorMessage}', style: const TextStyle(color: Colors.redAccent)),
+        ),
+      );
+    }
     if (provider.activePatientHistory.isEmpty) {
       return const Center(
         child: Text('No therapy sessions recorded yet.', style: TextStyle(color: Colors.white54)),
@@ -184,11 +192,19 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
 
   Widget _buildSessionCard(dynamic session) {
     // Attempt to parse standard fields out of the dynamic map
-    final dateStr = session['date'] ?? session['created_at'] ?? session['start_time'] ?? session['timestamp'];
+    final dateStr = session['started_at'] ?? session['date'] ?? session['created_at'] ?? session['start_time'] ?? session['timestamp'];
     final date = dateStr != null ? DateTime.tryParse(dateStr) : null;
-    final gameName = session['game_name'] ?? session['game_id'] ?? 'Game Session';
+    final gameName = session['game_id'] ?? session['game_name'] ?? 'Game Session';
     final score = session['score'] ?? 0;
-    final accuracy = session['accuracy'] ?? 0.0;
+    
+    double accuracy = 0.0;
+    if (session['accuracy'] != null) {
+      accuracy = (session['accuracy'] is int) 
+          ? (session['accuracy'] as int).toDouble() 
+          : (session['accuracy'] as double);
+    }
+    accuracy = accuracy * 100; // Convert 0-1 range to percentage
+
     final sessionId = session['id'];
     
     return Container(
@@ -330,6 +346,10 @@ class _PatientDetailScreenState extends State<PatientDetailScreen> {
         if (e.value['accuracy'] is int) acc = (e.value['accuracy'] as int).toDouble();
         else if (e.value['accuracy'] is double) acc = e.value['accuracy'] as double;
       }
+      
+      // Convert 0-1 range to percentage
+      acc = acc * 100;
+
       return FlSpot(e.key.toDouble(), acc);
     }).toList();
 

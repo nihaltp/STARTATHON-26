@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_tokens.dart';
 import '../../providers/ble_telemetry_provider.dart';
@@ -66,15 +67,27 @@ class _CargoCraneScreenState extends State<CargoCraneScreen>
   bool _debugPinch = false;
 
   final PatientApiService _apiService = PatientApiService();
-  final DateTime _startTime = DateTime.now();
+  late DateTime _startTime;
+  late String _gameSessionId;
   bool _isSubmitting = false;
   bool _isAiLoading = true;
   final List<SensorPacket> _sessionPackets = [];
+
+  void _startNewSession() {
+    _startTime = DateTime.now();
+    _gameSessionId = const Uuid().v4();
+    _apiService.createGameSession(
+      gameSessionId: _gameSessionId,
+      gameId: '3dc686c1-ae6f-4f76-800f-b47bb66f0c4e', // Placeholder UUID
+      startedAt: _startTime,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
     _spawnCrates();
+    _startNewSession();
 
     _gameLoop = AnimationController(
       vsync: this,
@@ -85,7 +98,7 @@ class _CargoCraneScreenState extends State<CargoCraneScreen>
   }
 
   Future<void> _fetchDifficultyParameters() async {
-    final params = await _apiService.getDifficultyParameters();
+    final params = await _apiService.getDifficultyParameters('3dc686c1-ae6f-4f76-800f-b47bb66f0c4e');
     if (mounted) {
       setState(() {
         if (params != null) {
@@ -149,6 +162,7 @@ class _CargoCraneScreenState extends State<CargoCraneScreen>
       _safeFrames = 0;
 
       _spawnCrates();
+      _startNewSession();
 
       _gameLoop.forward();
     });
@@ -228,8 +242,7 @@ class _CargoCraneScreenState extends State<CargoCraneScreen>
     try {
       final double accuracy = 7 > 0 ? (_cratesPlaced / 7.0) : 0.0;
       aiOverview = await _apiService.submitGameData(
-        gameId: '3dc686c1-ae6f-4f76-800f-b47bb66f0c4e', // Placeholder UUID
-        startedAt: _startTime,
+        gameSessionId: _gameSessionId,
         durationMs: DateTime.now().difference(_startTime).inMilliseconds,
         score: _cratesPlaced * 100, // example scoring
         accuracy: accuracy,

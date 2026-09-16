@@ -25,7 +25,7 @@ class DoctorApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'email': email, 'password': password}),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -47,7 +47,7 @@ class DoctorApiService {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode(data),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body);
@@ -63,7 +63,7 @@ class DoctorApiService {
     try {
       final response = await http
           .get(Uri.parse('$baseUrl/doctors/me'), headers: _headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200) {
         return DoctorProfile.fromJson(jsonDecode(response.body));
@@ -79,7 +79,7 @@ class DoctorApiService {
     try {
       final response = await http
           .get(Uri.parse('$baseUrl/patients'), headers: _headers)
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200) {
         final List data = jsonDecode(response.body);
@@ -100,7 +100,7 @@ class DoctorApiService {
             headers: _headers,
             body: jsonEncode(data),
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         return jsonDecode(response.body);
@@ -119,7 +119,7 @@ class DoctorApiService {
             Uri.parse('$baseUrl/patients/$patientId/history'),
             headers: _headers,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body) as List<dynamic>;
@@ -130,14 +130,17 @@ class DoctorApiService {
       throw Exception('Network error: $e');
     }
   }
-  Future<Map<String, dynamic>> getGameSessionAiOverview(String gameSessionId) async {
+
+  Future<Map<String, dynamic>> getGameSessionAiOverview(
+    String gameSessionId,
+  ) async {
     try {
       final response = await http
           .get(
             Uri.parse('$baseUrl/game-sessions/$gameSessionId/ai-overview'),
             headers: _headers,
           )
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 100));
 
       if (response.statusCode == 200) {
         return jsonDecode(response.body);

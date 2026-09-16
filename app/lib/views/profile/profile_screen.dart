@@ -69,8 +69,8 @@ class ProfileScreen extends StatelessWidget {
                         (docFirst != null ? '$docFirst $docLast' : '');
                   }
 
-                  if (doctorName.isEmpty) {
-                    doctorName = docData is String ? docData : 'Unknown';
+                  if (doctorName.isEmpty && docData is String) {
+                    doctorName = docData;
                   }
 
                   return Column(
@@ -84,25 +84,39 @@ class ProfileScreen extends StatelessWidget {
                               : 24, // Smaller font if it's raw JSON
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Dr. $doctorName',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          color: Colors.grey,
-                          fontWeight: FontWeight.w500,
+                      if (doctorName.isNotEmpty && doctorName != 'Unknown') ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          'Dr. $doctorName',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   );
                 },
               ),
               const SizedBox(height: 32),
-              const Center(
-                child: Text(
-                  'No summary data available.',
-                  style: DesignTokens.bodyStyle,
+              const SizedBox(height: 32),
+              ElevatedButton.icon(
+                onPressed: () {
+                  PatientApiService().logout();
+                  Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
+                },
+                icon: const Icon(Icons.logout),
+                label: const Text('Logout'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade50,
+                  foregroundColor: Colors.red,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(DesignTokens.borderRadiusMedium),
+                  ),
                 ),
               ),
             ],

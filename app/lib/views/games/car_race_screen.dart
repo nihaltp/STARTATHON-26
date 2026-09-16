@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_tokens.dart';
 import '../../providers/ble_telemetry_provider.dart';
@@ -62,6 +63,8 @@ class _CarRaceScreenState extends State<CarRaceScreen>
   bool _isSubmitting = false;
   Map<String, dynamic>? _aiOverview;
   String _submitError = '';
+  late String _gameSessionId;
+  late DateTime _startTime;
 
   // Difficulty Parameters
   bool _isAiLoading = true;
@@ -85,7 +88,7 @@ class _CarRaceScreenState extends State<CarRaceScreen>
   }
 
   Future<void> _fetchDifficultyParameters() async {
-    final params = await _apiService.getDifficultyParameters();
+    final params = await _apiService.getDifficultyParameters('00000000-0000-0000-0000-000000000001');
     if (mounted) {
       setState(() {
         if (params != null) {
@@ -153,6 +156,13 @@ class _CarRaceScreenState extends State<CarRaceScreen>
       _aiOverview = null;
       _submitError = '';
     });
+    _startTime = DateTime.now();
+    _gameSessionId = const Uuid().v4();
+    _apiService.createGameSession(
+      gameSessionId: _gameSessionId,
+      gameId: '00000000-0000-0000-0000-000000000001',
+      startedAt: _startTime,
+    );
     _gameLoop.forward(from: 0);
   }
 
@@ -181,11 +191,8 @@ class _CarRaceScreenState extends State<CarRaceScreen>
       };
 
       final overview = await _apiService.submitGameData(
-        gameId: '00000000-0000-0000-0000-000000000001',
-        startedAt: DateTime.now().subtract(
-          Duration(milliseconds: (_distanceTraveled / 100.0 * 1000).toInt()),
-        ),
-        durationMs: (_distanceTraveled / 100.0 * 1000).toInt(),
+        gameSessionId: _gameSessionId,
+        durationMs: DateTime.now().difference(_startTime).inMilliseconds,
         score: _distanceTraveled.toInt(),
         accuracy: 1.0,
         completionRate: 1.0,

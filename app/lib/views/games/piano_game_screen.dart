@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_tokens.dart';
 import '../../providers/ble_telemetry_provider.dart';
@@ -83,7 +84,8 @@ class _PianoGameScreenState extends State<PianoGameScreen>
   late DifficultySettings _settings;
   final PatientApiService _apiService = PatientApiService();
 
-  DateTime _startTime = DateTime.now();
+  late DateTime _startTime;
+  late String _gameSessionId;
   bool _isSubmitting = false;
   bool _isAiLoading = true;
 
@@ -107,11 +109,22 @@ class _PianoGameScreenState extends State<PianoGameScreen>
   // Anti-cheat tracking
   final List<bool> _laneReadyToHit = [true, true, true];
 
+  void _startNewSession() {
+    _startTime = DateTime.now();
+    _gameSessionId = const Uuid().v4();
+    _apiService.createGameSession(
+      gameSessionId: _gameSessionId,
+      gameId: 'edbc37b3-da00-4316-a56b-b1ca35cc58bd', // Placeholder UUID
+      startedAt: _startTime,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
     _currentDifficulty = widget.mode;
     _settings = DifficultySettings.settings[_currentDifficulty]!;
+    _startNewSession();
     _gameLoop = AnimationController(
       vsync: this,
       duration: const Duration(days: 99), // Run endlessly
@@ -121,7 +134,7 @@ class _PianoGameScreenState extends State<PianoGameScreen>
   }
 
   Future<void> _fetchDifficultyParameters() async {
-    final params = await _apiService.getDifficultyParameters();
+    final params = await _apiService.getDifficultyParameters('edbc37b3-da00-4316-a56b-b1ca35cc58bd');
     if (mounted) {
       setState(() {
         if (params != null) {
@@ -319,8 +332,7 @@ class _PianoGameScreenState extends State<PianoGameScreen>
     try {
       final accuracy = _hits + _misses > 0 ? (_hits / (_hits + _misses)) : 0.0;
       aiOverview = await _apiService.submitGameData(
-        gameId: 'edbc37b3-da00-4316-a56b-b1ca35cc58bd', // Placeholder UUID
-        startedAt: _startTime,
+        gameSessionId: _gameSessionId,
         durationMs: DateTime.now().difference(_startTime).inMilliseconds,
         score: _score,
         accuracy: accuracy,

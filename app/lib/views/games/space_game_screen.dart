@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import 'package:provider/provider.dart';
 import '../../core/design_tokens.dart';
 import '../../providers/ble_telemetry_provider.dart';
@@ -74,13 +75,28 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
   bool _debugShield = false;
 
   final PatientApiService _apiService = PatientApiService();
-  final DateTime _startTime = DateTime.now();
+  late String _gameSessionId;
+  late DateTime _startTime;
   bool _isSubmitting = false;
   bool _isAiLoading = true;
+
+  void _startNewSession() {
+    _startTime = DateTime.now();
+    _gameSessionId = const Uuid().v4();
+
+    // Create the session immediately on the backend
+    _apiService.createGameSession(
+      gameSessionId: _gameSessionId,
+      gameId: '00000000-0000-0000-0000-000000000003', // Placeholder UUID
+      startedAt: _startTime,
+    );
+  }
 
   @override
   void initState() {
     super.initState();
+    _startNewSession();
+
     _gameLoop = AnimationController(
       vsync: this,
       duration: const Duration(days: 99),
@@ -90,38 +106,47 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
   }
 
   Future<void> _fetchDifficultyParameters() async {
-    final params = await _apiService.getDifficultyParameters();
-    if (mounted) {
-      setState(() {
-        if (params != null) {
-          if (params.containsKey('target_threshold')) {
-            _flexThreshold = (params['target_threshold'] as num).toDouble();
-          }
-          if (params.containsKey('difficulty')) {
-            String diff = params['difficulty'].toString().toLowerCase();
-            if (diff == 'easy') {
-              _spawnDelay = 4.0;
-            } else if (diff == 'hard') {
-              _spawnDelay = 2.0;
-            } else {
-              _spawnDelay = 3.0;
+    try {
+      final params = await _apiService.getDifficultyParameters('00000000-0000-0000-0000-000000000003');
+      if (mounted) {
+        setState(() {
+          if (params != null) {
+            if (params.containsKey('target_threshold')) {
+              _flexThreshold = (params['target_threshold'] as num).toDouble();
+            }
+            if (params.containsKey('difficulty')) {
+              String diff = params['difficulty'].toString().toLowerCase();
+              if (diff == 'easy') {
+                _spawnDelay = 4.0;
+              } else if (diff == 'hard') {
+                _spawnDelay = 2.0;
+              } else {
+                _spawnDelay = 3.0;
+              }
+            }
+            if (params.containsKey('target_speed_bpm')) {
+              double bpm = (params['target_speed_bpm'] as num).toDouble();
+              _baseSpeedMultiplier = bpm / 60.0;
             }
           }
-          if (params.containsKey('target_speed_bpm')) {
-            double bpm = (params['target_speed_bpm'] as num).toDouble();
-            _baseSpeedMultiplier = bpm / 60.0;
-          }
-        }
-        
-        debugPrint('--- SPACE GAME CALIBRATED PARAMS ---');
-        debugPrint('Flex Threshold: $_flexThreshold');
-        debugPrint('Spawn Delay: $_spawnDelay');
-        debugPrint('Base Speed Multiplier: $_baseSpeedMultiplier');
-        debugPrint('------------------------------------');
 
-        _isAiLoading = false;
+          debugPrint('--- SPACE GAME CALIBRATED PARAMS ---');
+          debugPrint('Flex Threshold: $_flexThreshold');
+          debugPrint('Spawn Delay: $_spawnDelay');
+          debugPrint('Base Speed Multiplier: $_baseSpeedMultiplier');
+          debugPrint('------------------------------------');
+
+          _isAiLoading = false;
+        });
         _gameLoop.forward();
-      });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isAiLoading = false;
+        });
+        _gameLoop.forward();
+      }
     }
   }
 
@@ -135,6 +160,8 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
     if (gentleTier) {
       _flexThreshold = max(0.2, _flexThreshold * 0.85);
     }
+
+    _startNewSession();
 
     setState(() {
       _hullIntegrity = 1.0;
@@ -241,7 +268,9 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
       if (entity.isDestroyed) continue;
 
       // Move down
-      double speed = (entity.type == EntityType.empWave ? 150.0 : 100.0) * _baseSpeedMultiplier;
+      double speed =
+          (entity.type == EntityType.empWave ? 150.0 : 100.0) *
+          _baseSpeedMultiplier;
 
       if (entity.type == EntityType.fuelCore && entity.isBeingTractored) {
         // Lock onto ship slightly but don't fall as fast
@@ -340,8 +369,7 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
           ? (_dronesDestroyed / totalTargets.toDouble())
           : 0.0;
       final Map<String, dynamic> aiOverview = await _apiService.submitGameData(
-        gameId: '00000000-0000-0000-0000-000000000001', // Placeholder UUID
-        startedAt: _startTime,
+        gameSessionId: _gameSessionId,
         durationMs: DateTime.now().difference(_startTime).inMilliseconds,
         score: (_dronesDestroyed * 50) + (_coresHarvested * 100),
         accuracy: accuracy,
@@ -409,58 +437,72 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
                 style: TextStyle(color: Colors.orange, fontSize: 14),
               ),
               const SizedBox(height: 16),
-            Text(
-              'Drones Neutralized: $_dronesDestroyed',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            Text(
-              'Drones Missed: $_dronesMissed',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            Text(
-              'Cores Harvested: $_coresHarvested',
-              style: const TextStyle(color: Colors.cyanAccent),
-            ),
-            Text(
-              'Shield Blocks: $_shieldSuccesses / ${_shieldSuccesses + _shieldFailures}',
-              style: const TextStyle(color: Colors.amber),
-            ),
-            Text(
-              'Steering Smoothness: $smoothScore%',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'AI Summary',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+              Text(
+                'Drones Neutralized: $_dronesDestroyed',
+                style: const TextStyle(color: Colors.white70),
               ),
-            ),
-            MarkdownBody(
-              data: summary,
-              styleSheet: MarkdownStyleSheet(
-                p: const TextStyle(color: Colors.white70),
-                h1: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                h2: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                h3: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                listBullet: const TextStyle(color: Colors.white70),
+              Text(
+                'Drones Missed: $_dronesMissed',
+                style: const TextStyle(color: Colors.white70),
               ),
-            ),
-            if (focusAreas.isNotEmpty) ...[
-              const SizedBox(height: 16),
+              Text(
+                'Cores Harvested: $_coresHarvested',
+                style: const TextStyle(color: Colors.cyanAccent),
+              ),
+              Text(
+                'Shield Blocks: $_shieldSuccesses / ${_shieldSuccesses + _shieldFailures}',
+                style: const TextStyle(color: Colors.amber),
+              ),
+              Text(
+                'Steering Smoothness: $smoothScore%',
+                style: const TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 24),
               const Text(
-                'Focus Areas',
+                'AI Summary',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              ...focusAreas.map((area) => Text('• $area', style: const TextStyle(color: Colors.white70))),
+              MarkdownBody(
+                data: summary,
+                styleSheet: MarkdownStyleSheet(
+                  p: const TextStyle(color: Colors.white70),
+                  h1: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  h2: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  h3: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  listBullet: const TextStyle(color: Colors.white70),
+                ),
+              ),
+              if (focusAreas.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                const Text(
+                  'Focus Areas',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                ...focusAreas.map(
+                  (area) => Text(
+                    '• $area',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
-      ),
         actions: [
           TextButton(
             onPressed: () {
@@ -601,11 +643,19 @@ class _SpaceGameScreenState extends State<SpaceGameScreen>
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.auto_awesome, color: Colors.amber, size: 20),
+                          const Icon(
+                            Icons.auto_awesome,
+                            color: Colors.amber,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             'AI booting combat simulation protocols...',
-                            style: TextStyle(fontSize: 16, color: Colors.amber.withOpacity(0.8), fontStyle: FontStyle.italic),
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.amber.withOpacity(0.8),
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ],
                       ),

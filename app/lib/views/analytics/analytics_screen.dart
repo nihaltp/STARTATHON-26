@@ -1,10 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../../core/design_tokens.dart';
 import '../../services/patient_api_service.dart';
 
-class AnalyticsScreen extends StatelessWidget {
+class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
+
+  @override
+  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+}
+
+class _AnalyticsScreenState extends State<AnalyticsScreen> {
+  Key _futureKey = UniqueKey();
+
+  void _refresh() {
+    setState(() {
+      _futureKey = UniqueKey();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -14,11 +28,18 @@ class AnalyticsScreen extends StatelessWidget {
         title: const Text('AI Progress Analysis', style: DesignTokens.headingStyle),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: DesignTokens.primaryColor),
+            onPressed: _refresh,
+          ),
+        ],
       ),
       body: SafeArea(
         child: Padding(
           padding: DesignTokens.defaultPadding,
           child: FutureBuilder<Map<String, dynamic>?>(
+            key: _futureKey,
             future: PatientApiService().getProgressSummary(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -191,7 +212,9 @@ class AnalyticsScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Based on $sessions completed sessions',
+                        sessions > 0 
+                            ? 'Based on $sessions analyzed session${sessions == 1 ? '' : 's'}'
+                            : 'Based on recent sessions',
                         style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14),
                       ),
                     ],
@@ -225,12 +248,18 @@ class AnalyticsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            child: Text(
-              summary,
-              style: DesignTokens.bodyStyle.copyWith(
-                color: Colors.grey[800],
-                height: 1.6,
-                fontSize: 16,
+            child: MarkdownBody(
+              data: summary,
+              styleSheet: MarkdownStyleSheet(
+                p: DesignTokens.bodyStyle.copyWith(
+                  color: Colors.grey[800],
+                  height: 1.6,
+                  fontSize: 16,
+                ),
+                h1: const TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
+                h2: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
+                h3: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                listBullet: TextStyle(color: Colors.grey[800]),
               ),
             ),
           ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.1, end: 0),
